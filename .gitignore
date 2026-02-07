@@ -10,6 +10,7 @@ build/
 venv/
 env/
 .venv/
+poetry.lock
 
 # IDE
 .vscode/
@@ -18,3 +19,6 @@ env/
 # OS
 .DS_Store
 *~
+
+# Plan and notes
+plan/

@@ -1,0 +1,31 @@
+[project]
+name = "torch-derham"
+version = "0.1.0"
+description = "Pytorch toolbox for cochains on cell complexes"
+authors = [
+    {name = "Mathieu Parinet",email = "mathieu.parinet@tutamail.com"}
+]
+license = {text = "BSD 3-Clause"}
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+
+dependencies = [
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[project.optional-dependencies]
+compiled = [
+  # torch related dependencies must be installed separately via pip
+  # to prevent fails under PEP 517 isolation
+  "torch>=2.0.0,<2.9.0",
+  "torch-scatter>=2.0.0",
+  "torch-sparse>=0.6.0",
+]
+ 
+[build-system]
+requires = [
+    "poetry-core>=2.0.0,<3.0.0",
+]
+build-backend = "poetry.core.masonry.api"
