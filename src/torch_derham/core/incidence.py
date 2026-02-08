@@ -76,7 +76,7 @@ class BoundaryIncidence:
                 and shape (n_children, n_parents).
 
         k (int):
-            Dimension of the parent cells (the operator is ∂_k).
+            Dimension of the parent cells (the operator is ∂_k). Must be > 0.
 
         n_parents (int | None):
             Number of k-cells (columns). If None, may be inferred from indices
@@ -102,7 +102,7 @@ class BoundaryIncidence:
         n_children: int | None = None,
         validate: bool = True,
     ):
-        assert k >= 0
+        assert k > 0
         self.k = k
 
         # Set incidence tensor
@@ -136,7 +136,7 @@ class BoundaryIncidence:
           - row/col must be long
           - values must be ±1
           - bounds: row < N_{k-1}, col < N_k
-          - each k-cell has at least k boundary children (except k=0)
+          - each k-cell has at least k boundary children
         """
         row = self.inc.storage.row()
         col = self.inc.storage.col()
@@ -144,18 +144,18 @@ class BoundaryIncidence:
 
         assert row.dtype == torch.long and col.dtype == torch.long, "row/col must be long"
         assert val is not None, "Incidence must have values (signs)."
-        # value type: keep small ints, but float is also ok; only check content
+        # Value type: keep small ints, but float is also ok; only check content
         v = val.to(torch.int8)
         u = torch.unique(v)
-        assert torch.all((u == 1) | (u == -1)), f"Signs must be ±1 (got {u.tolist()})"
+        assert torch.all((u == 1) | (u == -1)), "Signs must be ±1"
 
-        # bounds
+        # Bounds
         if row.numel():
             assert int(row.min()) >= 0 and int(row.max()) < self.shape[0]
             assert int(col.min()) >= 0 and int(col.max()) < self.shape[1]
 
-        # sanity: each k-cell has at least k boundary children (except k=0)
-        if self.k > 0 and self.shape[1] > 0:
+        # Sanity: each k-cell has at least k boundary children
+        if self.shape[1] > 0:
             counts = torch.bincount(col, minlength=self.shape[1])
             assert torch.all(counts >= self.k), f"Some {self.k}-cells have < {self.k} children."
 
@@ -167,24 +167,28 @@ class BoundaryIncidence:
         """Return d_{k-1} = (∂_k)^T as SparseTensor: C^{k-1} -> C^k."""
         return self.inc.t()
 
-    def to(self, *args, **kwargs):
+    def to(self, *args, **kwargs) -> "BoundaryIncidence":
         """Move the incidence matrix to the specified device."""
         self.inc.to(*args, **kwargs)
+        return self
 
-    def cpu(self):
+    def cpu(self) -> "BoundaryIncidence":
         """Move the incidence matrix to CPU."""
         self.inc.cpu()
+        return self
 
-    def cuda(self):
+    def cuda(self) -> "BoundaryIncidence":
         """Move the incidence matrix to GPU."""
         self.inc.cuda()
+        return self
 
-    def pin_memory(self):
+    def pin_memory(self) -> "BoundaryIncidence":
         """Move the incidence matrix to pinned memory."""
         self.inc.pin_memory()
+        return self
 
-    def to_value_dtype_(self, dtype: torch.dtype):
-        """Cast SparseTensor values to `dtype` (reuses row/col, replaces value).
+    def to_value_dtype(self, dtype: torch.dtype) -> "BoundaryIncidence":
+        """Cast incidence tensor values to `dtype`.
 
         Example: conversion to float16
         """
@@ -198,15 +202,16 @@ class BoundaryIncidence:
             value=val.to(dtype),
             sparse_sizes=self.shape,
         )
+        return self
 
-    def half_(self):
-        """Cast SparseTensor values to float16 (reuses row/col, replaces value)."""
-        return self.to_value_dtype_(torch.float16)
+    def half(self) -> "BoundaryIncidence":
+        """Cast incidence tensor values to float16."""
+        return self.to_value_dtype(torch.float16)
 
-    def float_(self):
-        """Cast SparseTensor values to float32 (reuses row/col, replaces value)."""
-        return self.to_value_dtype_(torch.float32)
+    def float(self) -> "BoundaryIncidence":
+        """Cast incidence tensor values to float32."""
+        return self.to_value_dtype(torch.float32)
 
-    def double_(self):
-        """Cast SparseTensor values to float64 (reuses row/col, replaces value)."""
-        return self.to_value_dtype_(torch.float64)
+    def double(self) -> "BoundaryIncidence":
+        """Cast incidence tensor values to float64."""
+        return self.to_value_dtype(torch.float64)
