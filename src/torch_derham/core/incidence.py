@@ -126,10 +126,18 @@ class BoundaryIncidence:
         if validate:
             self._validate_cells()
 
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
     @property
     def shape(self) -> tuple[int, int]:
         """Shape of the incidence matrix (N_{k-1}, N_k) / (n_children, n_parents)."""
         return self._shape
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
 
     def _validate_cells(self) -> None:
         """Validate the incidence matrix for the following criteria:
@@ -159,6 +167,10 @@ class BoundaryIncidence:
             counts = torch.bincount(col, minlength=self.shape[1])
             assert torch.all(counts >= self.k), f"Some {self.k}-cells have < {self.k} children."
 
+    # ------------------------------------------------------------------
+    # Boundary / coboundary accessors
+    # ------------------------------------------------------------------
+
     def boundary(self) -> SparseTensor:
         """Return ∂_k as SparseTensor: C_k -> C_{k-1} (rows=children, cols=parents)."""
         return self.inc
@@ -166,6 +178,10 @@ class BoundaryIncidence:
     def coboundary(self) -> SparseTensor:
         """Return d_{k-1} = (∂_k)^T as SparseTensor: C^{k-1} -> C^k."""
         return self.inc.t()
+
+    # ------------------------------------------------------------------
+    # Device movement
+    # ------------------------------------------------------------------
 
     def to(self, *args, **kwargs) -> "BoundaryIncidence":
         """Move the incidence matrix to the specified device."""
@@ -186,6 +202,10 @@ class BoundaryIncidence:
         """Move the incidence matrix to pinned memory."""
         self.inc.pin_memory()
         return self
+
+    # ------------------------------------------------------------------
+    # Type casting
+    # ------------------------------------------------------------------
 
     def to_value_dtype(self, dtype: torch.dtype) -> "BoundaryIncidence":
         """Cast incidence tensor values to `dtype`.
