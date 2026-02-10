@@ -212,7 +212,7 @@ class ContiguousChainComplex:
     @property
     def n_total(self) -> int:
         """Total number of cells across all dimensions."""
-        return int(self._offsets[-1].item())
+        return int(self._offsets[-1].cpu().item())
 
     def n_cells(self, k: int) -> int:
         """Number of k-cells."""
@@ -339,15 +339,15 @@ class ContiguousChainComplex:
             val = sp.storage.value()
 
             # Shift row indices into the (k-1)-cell global range
-            row_offset = int(offsets[k - 1].item())
+            row_offset = int(offsets[k - 1].cpu().item())
             # Shift col indices into the k-cell global range
-            col_offset = int(offsets[k].item())
+            col_offset = int(offsets[k].cpu().item())
 
             all_rows.append(row + row_offset)
             all_cols.append(col + col_offset)
             all_vals.append(val)
 
-        n_total = int(offsets[-1].item())
+        n_total = int(offsets[-1].cpu().item())
 
         # Assemble the single global SparseTensor
         data = SparseTensor(
@@ -357,7 +357,7 @@ class ContiguousChainComplex:
             sparse_sizes=(n_total, n_total),
         )
 
-        return cls(data=data, offsets=offsets)
+        return cls(data=data, offsets=offsets.to(data.device))
 
     # ------------------------------------------------------------------
     # Device movement

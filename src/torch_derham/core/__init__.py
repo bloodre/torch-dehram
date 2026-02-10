@@ -1,12 +1,13 @@
 """ Core modules """
 
-from .cochain import Cochain
+from .cochain import CoChain, GradedCochain
 from .complex import ChainComplex, ContiguousChainComplex
 from .incidence import BoundaryIncidence
 
 __all__ = [
     "BoundaryIncidence",
-    "Cochain",
     "ChainComplex",
+    "CoChain",
     "ContiguousChainComplex",
+    "GradedCochain",
 ]
