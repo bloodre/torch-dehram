@@ -34,6 +34,7 @@ class ChainComplex:
         validate: bool = True,
         validate_idempotent: bool = False,
     ):
+        assert len(boundaries) > 0, "Need at least one boundary operator."
         self.boundaries = list(boundaries)
         if validate:
             self._validate(validate_idempotent=validate_idempotent)
@@ -80,6 +81,10 @@ class ChainComplex:
     # ------------------------------------------------------------------
     # Device movement
     # ------------------------------------------------------------------
+
+    def device(self) -> torch.device:
+        """Return the used device."""
+        return self.boundaries[0].device()
 
     def to(self, *args, **kwargs) -> "ChainComplex":
         """Move the chain complex to the specified device."""
@@ -320,7 +325,8 @@ class ContiguousChainComplex:
             cell_counts.append(b.shape[1])
 
         # Build offsets: offsets[k] = sum(N_0 .. N_{k-1})
-        offsets = torch.zeros(dim + 2, dtype=torch.long)
+        device = boundaries[0].device()
+        offsets = torch.zeros(dim + 2, dtype=torch.long, device=device)
         for i, count in enumerate(cell_counts):
             offsets[i + 1] = offsets[i] + count
 
@@ -339,9 +345,9 @@ class ContiguousChainComplex:
             val = sp.storage.value()
 
             # Shift row indices into the (k-1)-cell global range
-            row_offset = int(offsets[k - 1].cpu().item())
+            row_offset = offsets[k - 1]
             # Shift col indices into the k-cell global range
-            col_offset = int(offsets[k].cpu().item())
+            col_offset = offsets[k]
 
             all_rows.append(row + row_offset)
             all_cols.append(col + col_offset)
@@ -357,11 +363,15 @@ class ContiguousChainComplex:
             sparse_sizes=(n_total, n_total),
         )
 
-        return cls(data=data, offsets=offsets.to(data.device))
+        return cls(data=data, offsets=offsets)
 
     # ------------------------------------------------------------------
     # Device movement
     # ------------------------------------------------------------------
+
+    def device(self) -> torch.device:
+        """Return the used device."""
+        return self._data.device()
 
     def to(self, *args, **kwargs) -> ContiguousChainComplex:
         """Move the contiguous chain complex to the specified device."""

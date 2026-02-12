@@ -224,6 +224,10 @@ class BoundaryIncidence:
     # Device movement
     # ------------------------------------------------------------------
 
+    def device(self) -> torch.device:
+        """Return the used device."""
+        return self.inc.device()
+
     def to(self, *args, **kwargs) -> "BoundaryIncidence":
         """Move the incidence matrix to the specified device."""
         self.inc.to(*args, **kwargs)
