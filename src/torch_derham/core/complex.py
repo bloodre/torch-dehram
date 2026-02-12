@@ -6,7 +6,7 @@ coboundaries d_k : C^k -> C^{k+1} via transposes.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Optional, Sequence
 
 import torch
 from torch import Tensor
@@ -47,6 +47,11 @@ class ChainComplex:
     def dim(self) -> int:
         """Topological dimension (max k)."""
         return len(self.boundaries)
+
+    @property
+    def ordered(self) -> bool:
+        """Whether all boundary operators carry cell ordering."""
+        return all(b.ordered for b in self.boundaries)
 
     def n_cells(self, k: int) -> int:
         """Number of k-cells, inferred from boundary shapes."""
@@ -183,6 +188,10 @@ class ContiguousChainComplex:
             all boundary blocks.
         offsets: 1-D int32 or int64 tensor of length dim+2.
             offsets[k] is the first global index of the k-cell space.
+        order: 1-D integer tensor of length nnz(data), giving the local
+            child position within each parent cell.  Aligned with
+            ``data.storage.{row,col,value}``.  None when ordering is
+            unavailable.
         validate_idempotent: whether to validate that ∂_{k-1} ∘ ∂_k = 0
             for k=2..dim. This is an expensive check (O(N^2) per boundary).
             Defaults to False.
@@ -192,12 +201,15 @@ class ContiguousChainComplex:
         self,
         data: SparseTensor,
         offsets: Tensor,
+        order: Optional[Tensor] = None,
         validate_idempotent: bool = False,
     ):
         self._data = data
         if not hasattr(self._data, "colptr") or self._data.colptr() is None:
             self._data.fill_cache_()
         self._offsets = offsets
+        self._order = order
+
         if validate_idempotent:
             self._validate_idempotent()
 
@@ -220,6 +232,16 @@ class ContiguousChainComplex:
         """Topological dimension (max k)."""
         # offsets has dim+2 entries: [0-cells, 1-cells, ..., dim-cells, end]
         return self._offsets.numel() - 2
+
+    @property
+    def ordered(self) -> bool:
+        """Whether the complex carries cell ordering."""
+        return self._order is not None
+
+    @property
+    def order(self) -> Optional[Tensor]:
+        """Global order tensor aligned with data.storage, or None."""
+        return self._order
 
     @property
     def n_total(self) -> int:
@@ -348,6 +370,8 @@ class ContiguousChainComplex:
         all_rows: list[Tensor] = []
         all_cols: list[Tensor] = []
         all_vals: list[Tensor] = []
+        all_orders: list[Tensor] = []
+        all_ordered = True
 
         for k_idx, b in enumerate(boundaries):
             # k_idx=0 corresponds to ∂_1, k_idx=1 to ∂_2, etc.
@@ -367,6 +391,11 @@ class ContiguousChainComplex:
             all_cols.append(col + col_offset)
             all_vals.append(val)
 
+            if b.ordered:
+                all_orders.append(b.order)
+            else:
+                all_ordered = False
+
         n_total = int(offsets[-1].cpu().item())
 
         # Assemble the single global SparseTensor
@@ -377,7 +406,10 @@ class ContiguousChainComplex:
             sparse_sizes=(n_total, n_total),
         )
 
-        return cls(data=data, offsets=offsets)
+        # Concatenate order tensors when all boundaries are ordered
+        order = torch.cat(all_orders) if all_ordered else None
+
+        return cls(data=data, offsets=offsets, order=order)
 
     # ------------------------------------------------------------------
     # Device movement
@@ -391,24 +423,32 @@ class ContiguousChainComplex:
         """Move the contiguous chain complex to the specified device."""
         self._data = self._data.to(*args, **kwargs)
         self._offsets = self._offsets.to(*args, **kwargs)
+        if self._order is not None:
+            self._order = self._order.to(*args, **kwargs)
         return self
 
     def cpu(self) -> ContiguousChainComplex:
         """Move the contiguous chain complex to CPU."""
         self._data = self._data.cpu()
         self._offsets = self._offsets.cpu()
+        if self._order is not None:
+            self._order = self._order.cpu()
         return self
 
     def cuda(self) -> ContiguousChainComplex:
         """Move the contiguous chain complex to GPU."""
         self._data = self._data.cuda()
         self._offsets = self._offsets.cuda()
+        if self._order is not None:
+            self._order = self._order.cuda()
         return self
 
     def pin_memory(self) -> ContiguousChainComplex:
         """Move the contiguous chain complex to pinned memory."""
         self._data = self._data.pin_memory()
         self._offsets = self._offsets.pin_memory()
+        if self._order is not None:
+            self._order = self._order.pin_memory()
         return self
 
     # ------------------------------------------------------------------
