@@ -114,13 +114,20 @@ class ChainComplex:
     # Construction helpers
     # ------------------------------------------------------------------
 
-    def contiguous(self) -> "ContiguousChainComplex":
+    def contiguous(self, offset: bool = False) -> "ContiguousChainComplex":
         """Build a contiguous representation of this chain complex.
 
         All k-cell index spaces are merged into a single global index space,
         and all boundary operators are packed into one SparseTensor.
+
+        Args:
+            offset: whether to compute offsets from the boundary shapes.
+                When True, offsets are computed from the boundary shapes.
+                When False, it is assumed that the boundaries already have
+                non-overlapping indices.
+                Defaults to False.
         """
-        return ContiguousChainComplex.from_boundaries(self.boundaries)
+        return ContiguousChainComplex.from_boundaries(self.boundaries, offset)
 
     # ------------------------------------------------------------------
     # Validation
@@ -300,35 +307,42 @@ class ContiguousChainComplex:
     def from_boundaries(
         cls,
         boundaries: Sequence[BoundaryIncidence],
+        offset: bool = False,
     ) -> ContiguousChainComplex:
         """Build a ContiguousChainComplex from a sequence of BoundaryIncidence.
 
         Each BoundaryIncidence for ∂_k has shape (N_{k-1}, N_k).
         The global index space is laid out as:
             [0-cells | 1-cells | ... | dim-cells]
-        with offsets computed from the boundary shapes.
+        with offsets optionally computed from the boundary shapes.
 
         Args:
             boundaries: sequence of BoundaryIncidence for k=1..dim
                 (in increasing k order).
+            offset: whether to compute offsets from the boundary shapes.
+                When True, offsets are computed from the boundary shapes.
+                When False, it is assumed that the boundaries already have
+                non-overlapping indices.
+                Defaults to False.
         """
         if not boundaries:
             raise ValueError("Need at least one boundary operator.")
 
-        dim = len(boundaries)
-
-        # Compute per-dimension sizes: N_0, N_1, ..., N_dim
-        # N_0 = boundaries[0].shape[0]  (number of 0-cells)
-        # N_k = boundaries[k-1].shape[1] for k >= 1
-        cell_counts = [boundaries[0].shape[0]]
-        for b in boundaries:
-            cell_counts.append(b.shape[1])
-
         # Build offsets: offsets[k] = sum(N_0 .. N_{k-1})
+        dim = len(boundaries)
         device = boundaries[0].device()
         offsets = torch.zeros(dim + 2, dtype=torch.long, device=device)
-        for i, count in enumerate(cell_counts):
-            offsets[i + 1] = offsets[i] + count
+        if offset:
+            # Compute per-dimension sizes: N_0, N_1, ..., N_dim
+            # N_0 = boundaries[0].shape[0]  (number of 0-cells)
+            # N_k = boundaries[k-1].shape[1] for k >= 1
+            cell_counts = [boundaries[0].shape[0]]
+            for b in boundaries:
+                cell_counts.append(b.shape[1])
+
+            # Compute offsets
+            for i, count in enumerate(cell_counts):
+                offsets[i + 1] = offsets[i] + count
 
         # Collect shifted COO triplets from each ∂_k
         all_rows: list[Tensor] = []
