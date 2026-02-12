@@ -13,15 +13,31 @@ import torch
 from torch import Tensor
 from torch_sparse import SparseTensor
 
+_INT_DTYPES = (torch.long, torch.int, torch.int16, torch.int8)
+
+
+def _sort_order(parent: Tensor, child: Tensor, order: Tensor | None) -> Tensor | None:
+    """Return the child cells order of the incidence matrix after sorting."""
+    # Return as is if None
+    if order is None:
+        return order
+    # permutation that torch_sparse effectively applies (row-major then col)
+    # stable=True is important for determinism
+    perm = child.argsort(stable=True)
+    perm = perm[parent[perm].argsort(stable=True)]
+    return order[perm]
+
 
 def _parse_incidence(
         inc: Tensor | SparseTensor,
         sparse_sizes: tuple[int, int] | None = None,
-    ) -> SparseTensor:
-    """Return incidence as SparseTensor with shape (n_children, n_parents)."""
+        order: Tensor | None = None,
+    ) -> tuple[SparseTensor, Tensor | None]:
+    """Return incidence as SparseTensor with shape (n_children, n_parents)
+    and the cells order after sorting."""
     # Return SparseTensor as-is
     if isinstance(inc, SparseTensor):
-        return inc
+        return inc, order
 
     # Check convention: (nnz,2/3)
     assert isinstance(inc, Tensor)
@@ -37,7 +53,8 @@ def _parse_incidence(
         sign = torch.ones_like(parent, dtype=torch.float32)
 
     # store as (row=child, col=parent)
-    return SparseTensor(row=child, col=parent, value=sign, sparse_sizes=sparse_sizes)
+    sp = SparseTensor(row=child, col=parent, value=sign, sparse_sizes=sparse_sizes)
+    return sp, _sort_order(parent, child, order)
 
 
 class BoundaryIncidence:
@@ -78,6 +95,16 @@ class BoundaryIncidence:
         k (int):
             Dimension of the parent cells (the operator is ∂_k). Must be > 0.
 
+        order (Tensor | None):
+            Order of the cells. Allows to represent parent cells as a list
+            [c_0, ..., c_m] where c_i is the child cells. When a parent cell
+            is composed of m + 1 child cells, it is expected that the associated
+            order values assemble into the range [0, m], hence representing a permutation.
+            -> Required for cup products.
+            When incidence is provided as a tensor, internal conversion to a SparseTensor
+            operates a row-major then col-major sort: order is automatically adjusted.
+            It is not the case for SparseTensor and we expect the order to be provided as-is.
+
         n_parents (int | None):
             Number of k-cells (columns). If None, may be inferred from indices
             (note: inference misses isolated cells).
@@ -98,6 +125,7 @@ class BoundaryIncidence:
         self,
         incidence: Tensor | SparseTensor,
         k: int,
+        order: Tensor | None = None,
         n_parents: int | None = None,
         n_children: int | None = None,
         validate: bool = True,
@@ -111,7 +139,7 @@ class BoundaryIncidence:
             if n_children is not None and n_parents is not None
             else None
         )
-        self.inc = _parse_incidence(incidence, sparse_sizes)
+        self.inc, self.order = _parse_incidence(incidence, sparse_sizes, order)
 
         # Infer sizes if not provided
         if sparse_sizes is None:
@@ -121,6 +149,7 @@ class BoundaryIncidence:
             n_children = int(row.max().item()) + 1 if row.numel() else 0
 
         self._shape = (n_children, n_parents)
+        self._ordered = order is not None
 
         # Validate data
         if validate:
@@ -134,6 +163,11 @@ class BoundaryIncidence:
     def shape(self) -> tuple[int, int]:
         """Shape of the incidence matrix (N_{k-1}, N_k) / (n_children, n_parents)."""
         return self._shape
+
+    @property
+    def ordered(self) -> bool:
+        """Whether the cells are ordered."""
+        return self._ordered
 
     # ------------------------------------------------------------------
     # Validation
@@ -167,6 +201,13 @@ class BoundaryIncidence:
             counts = torch.bincount(col, minlength=self.shape[1])
             assert torch.all(counts >= self.k), f"Some {self.k}-cells have < {self.k} children."
 
+        # Order
+        if self.ordered:
+            assert self.order.dtype in _INT_DTYPES, "Must be an integer dtype."
+            assert self.order.ndim == 1, "Must be a 1D tensor."
+            assert self.order.numel() == self.shape[1], "Must match cell numbers."
+            # Note: should check correct permutations representation?
+
     # ------------------------------------------------------------------
     # Boundary / coboundary accessors
     # ------------------------------------------------------------------
@@ -186,21 +227,29 @@ class BoundaryIncidence:
     def to(self, *args, **kwargs) -> "BoundaryIncidence":
         """Move the incidence matrix to the specified device."""
         self.inc.to(*args, **kwargs)
+        if self.ordered:
+            self.order.to(*args, **kwargs)
         return self
 
     def cpu(self) -> "BoundaryIncidence":
         """Move the incidence matrix to CPU."""
         self.inc.cpu()
+        if self.ordered:
+            self.order.cpu()
         return self
 
     def cuda(self) -> "BoundaryIncidence":
         """Move the incidence matrix to GPU."""
         self.inc.cuda()
+        if self.ordered:
+            self.order.cuda()
         return self
 
     def pin_memory(self) -> "BoundaryIncidence":
         """Move the incidence matrix to pinned memory."""
         self.inc.pin_memory()
+        if self.ordered:
+            self.order.pin_memory()
         return self
 
     # ------------------------------------------------------------------
