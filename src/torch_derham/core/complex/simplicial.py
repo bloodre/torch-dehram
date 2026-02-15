@@ -155,7 +155,7 @@ def _build_boundary_incidence_k(
     )
 
     face_pos = torch.arange(k + 1, dtype=idx_dtype).repeat(n_parents)
-    sign = (1 - 2 * (face_pos & 1))
+    sign = 1 - 2 * (face_pos & 1)
 
     nnz = parent_idx.numel()
     incidence = torch.empty((nnz, 3), dtype=idx_dtype)
