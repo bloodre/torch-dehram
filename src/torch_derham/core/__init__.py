@@ -1,8 +1,7 @@
 """ Core modules """
 
 from .cochain import CoChain, GradedCochain
-from .complex import ChainComplex, ContiguousChainComplex
-from .incidence import BoundaryIncidence
+from .complex import BoundaryIncidence, ChainComplex, ContiguousChainComplex
 
 __all__ = [
     "BoundaryIncidence",

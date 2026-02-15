@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from torch_sparse import SparseTensor
 
-_INT_DTYPES = (torch.long, torch.int, torch.int16, torch.int8)
+_INT_DTYPES = (torch.long, torch.int32, torch.int, torch.int16, torch.int8)
 
 
 def _sort_order(parent: Tensor, child: Tensor, order: Tensor | None) -> Tensor | None:
@@ -41,7 +41,9 @@ def _parse_incidence(
 
     # Check convention: (nnz,2/3)
     assert isinstance(inc, Tensor)
-    assert inc.dtype == torch.long, "Incidence must be torch.long indices/signs."
+    assert inc.dtype in (torch.int32, torch.int64, torch.long), (
+        f"Incidence must be int32 or int64, got {inc.dtype}"
+    )
     assert inc.ndim == 2 and inc.size(1) in (2, 3), "Incidence must be (nnz,2) or (nnz,3)."
 
     # Extract parent/child/signed
@@ -52,8 +54,13 @@ def _parse_incidence(
     else:
         sign = torch.ones_like(parent, dtype=torch.float32)
 
-    # store as (row=child, col=parent)
-    sp = SparseTensor(row=child, col=parent, value=sign, sparse_sizes=sparse_sizes)
+    # Cast to torch.long for SparseTensor (required by torch_sparse)
+    sp = SparseTensor(
+        row=child.to(torch.long),
+        col=parent.to(torch.long),
+        value=sign,
+        sparse_sizes=sparse_sizes,
+    )
     return sp, _sort_order(parent, child, order)
 
 
