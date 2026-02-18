@@ -12,7 +12,7 @@ import torch
 from torch import Tensor
 
 from ..cochain import CoChain
-from ..index import row
+from ..ops.index import row
 from .incidence import BoundaryIncidence
 from .chain import ChainComplex
 

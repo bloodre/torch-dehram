@@ -2,7 +2,7 @@
 
 from .cochain import CoChain, GradedCochain
 from .complex import BoundaryIncidence, ChainComplex, ContiguousChainComplex
-from .index import row
+from .ops.index import row
 
 __all__ = [
     "BoundaryIncidence",
