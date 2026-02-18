@@ -23,8 +23,14 @@ class InnerProduct(ABC):
     where M_k is a symmetric positive definite operator.
 
     Implementations must provide:
-    - apply(k, x): compute M_k @ x
-    - solve(k, b): solve M_k @ x = b for x
+    - apply(x, k): compute M_k @ x for specific degree k
+    - solve(b, k): solve M_k @ x = b for x
+
+    Global operator support (k=None):
+    When k=None, methods operate on the full graded space (all degrees).
+    This is useful for ContiguousChainComplex where all k-cells are indexed
+    in a single global space. Implementations may raise NotImplementedError
+    if global operations are not supported.
 
     Optionally may provide:
     - diagonal(k): extract diagonal of M_k (for diagonal operators)
@@ -32,47 +38,47 @@ class InnerProduct(ABC):
     """
 
     @abstractmethod
-    def apply(self, k: int, x: Tensor) -> Tensor:
+    def apply(self, x: Tensor, k: Optional[int] = None) -> Tensor:
         """Apply inner product operator M_k to vector x.
 
         Args:
-            k (int): cochain degree.
-            x (Tensor): (n_k, d) tensor of cochain values.
+            x (Tensor): (n_k, d) or (n_total, d) tensor of cochain values.
+            k (int | None): cochain degree, or None for global operator.
 
         Returns:
-            M_k @ x as (n_k, d) tensor.
+            M_k @ x as (n_k, d) or (n_total, d) tensor.
         """
 
     @abstractmethod
-    def solve(self, k: int, b: Tensor) -> Tensor:
+    def solve(self, b: Tensor, k: Optional[int] = None) -> Tensor:
         """Solve M_k @ x = b for x.
 
         Args:
-            k (int): cochain degree.
-            b (Tensor): (n_k, d) tensor of right-hand side.
+            b (Tensor): (n_k, d) or (n_total, d) tensor of right-hand side.
+            k (int | None): cochain degree, or None for global operator.
 
         Returns:
-            x as (n_k, d) tensor satisfying M_k @ x = b.
+            x as (n_k, d) or (n_total, d) tensor satisfying M_k @ x = b.
         """
 
-    def diagonal(self, _k: int) -> Optional[Tensor]:
+    def diagonal(self, k: Optional[int] = None) -> Optional[Tensor]:  # pylint: disable=unused-argument
         """Extract diagonal of M_k (if available).
 
         Args:
-            _k (int): cochain degree.
+            k (int | None): cochain degree, or None for global operator.
 
         Returns:
-            (n_k,) tensor of diagonal entries, or None if not available.
+            (n_k,) or (n_total,) tensor of diagonal entries, or None if not available.
         """
         return None
 
-    def matrix(self, _k: int) -> Optional[SparseTensor]:
+    def matrix(self, k: Optional[int] = None) -> Optional[SparseTensor]:  # pylint: disable=unused-argument
         """Return explicit sparse matrix M_k (if available).
 
         Args:
-            _k (int): cochain degree.
+            k (int | None): cochain degree, or None for global operator.
 
         Returns:
-            (n_k, n_k) SparseTensor, or None if not available.
+            (n_k, n_k) or (n_total, n_total) SparseTensor, or None if not available.
         """
         return None
