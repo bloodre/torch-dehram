@@ -13,6 +13,7 @@ from torch import Tensor
 
 from ..cochain import CoChain
 from ..ops.index import row
+from .cell_indexing import CellIndexing, FaceLookup
 from .incidence import BoundaryIncidence
 from .chain import ChainComplex
 
@@ -105,7 +106,7 @@ def _build_boundary_incidence_k(
     return incidence, order
 
 
-class SimplicialChainComplex:
+class SimplicialChainComplex(CellIndexing, FaceLookup):
     """Simplicial chain complex with implicit boundary structure.
 
     Stores k-simplices for k=0..dim as vertex lists. The boundary operator
