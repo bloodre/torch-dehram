@@ -90,7 +90,7 @@ def _simplex_volume(verts: Tensor) -> Tensor:
 
     # vol = sqrt(det(G)) / j!
     sign, logdet = torch.linalg.slogdet(G)
-    gram_det = (sign * torch.exp(0.5 * logdet))  # (N,)
+    gram_det = sign * torch.exp(0.5 * logdet)  # (N,)
 
     factorial_j = float(torch.arange(1, j + 1).prod().item())
     return gram_det.abs() / factorial_j
