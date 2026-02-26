@@ -131,7 +131,7 @@ class SimplicialGeometry:
         For m > n (embedded), computes the pseudoinverse transpose.
 
         Returns:
-            (N_n, n, m) matrices (J_T^{-1})^T for pulling back covectors.
+            (N_n, m, n) matrices (J_T^{-1})^T for pulling back covectors.
 
         Raises:
             ValueError: if n > m (simplex dimension exceeds ambient dimension).
