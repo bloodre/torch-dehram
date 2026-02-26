@@ -20,8 +20,8 @@ from torch_sparse import SparseTensor
 from ..complex.chain import ChainComplex, ContiguousChainComplex
 from ..metric.inner_product import InnerProduct
 from ..solvers.cg import Preconditioner, cg_solve
-from .assembly import assemble_global_mass_all
 from .geometry import SimplicialGeometry
+from .mass import assemble_global_mass_all
 
 
 class FEECInnerProduct(InnerProduct):

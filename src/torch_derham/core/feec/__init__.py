@@ -5,9 +5,10 @@ with quadrature-based assembly of sparse mass matrices and inner products.
 
 Main components:
 - SimplicialGeometry: affine simplex geometry (Jacobians, det, pullback).
-- Whitney basis evaluators on reference simplex (reference.py).
+- Whitney basis evaluators on reference simplex (whitney_reference.py).
+- WhitneyFormEvaluator: unified form evaluation class (form.py).
 - Quadrature rules on reference simplices (quadrature.py).
-- Mass matrix assembly (assembly.py).
+- Mass matrix assembly (mass.py).
 - FEECInnerProduct: sparse mass-based inner product with CG solver.
 
 Example usage:
@@ -30,15 +31,16 @@ Example usage:
     ```
 """
 
-from .assembly import (
+from .form import WhitneyFormEvaluator
+from .geometry import SimplicialGeometry
+from .inner_product import FEECInnerProduct
+from .mass import (
     assemble_global_mass_all,
     assemble_global_mass_k,
     assemble_local_mass_k,
 )
-from .geometry import SimplicialGeometry
-from .inner_product import FEECInnerProduct
 from .quadrature import quadrature_simplex
-from .reference import (
+from .whitney_reference import (
     enumerate_whitney_dofs,
     eval_whitney_kform_all,
 )
@@ -46,6 +48,7 @@ from .reference import (
 __all__ = [
     "FEECInnerProduct",
     "SimplicialGeometry",
+    "WhitneyFormEvaluator",
     "assemble_global_mass_all",
     "assemble_global_mass_k",
     "assemble_local_mass_k",

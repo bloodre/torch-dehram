@@ -22,7 +22,6 @@ These are expressed as differential forms (alternating tensors) at each point.
 For computation in embedded ℝ^m, they are pulled back via the affine map
 F_T : Δⁿ → T, which requires the inverse Jacobian.
 """
-# pylint: disable=invalid-name
 
 from __future__ import annotations
 
@@ -55,28 +54,31 @@ def barycentric_gradients_reference(n: int, device: torch.device) -> Tensor:
 
 def eval_whitney_0form(
     barycentric: Tensor,
-    vertex_index: int,
+    vertices: Tensor,
 ) -> Tensor:
-    """Evaluate Whitney 0-form at barycentric points.
+    """Evaluate Whitney 0-forms at barycentric points.
 
     ω_i^0(λ) = λ_i (scalar per point).
 
     Args:
         barycentric (Tensor): (N, n+1) barycentric coordinates.
-        vertex_index (int): index i ∈ {0, ..., n}.
+        vertices (Tensor): (M,) or (M, 1) vertex indices.
 
     Returns:
-        (N,) scalars.
+        (N, M) scalars.
     """
-    return barycentric[:, vertex_index]
+    if vertices.dim() == 1:
+        vertices = vertices.unsqueeze(-1)
+    vertices = vertices.squeeze(-1)
+    return barycentric[:, vertices]
 
 
 def eval_whitney_1form(
     barycentric: Tensor,
     grad_lambda: Tensor,
-    edge: tuple[int, int],
+    edges: Tensor,
 ) -> Tensor:
-    """Evaluate Whitney 1-form at barycentric points.
+    """Evaluate Whitney 1-forms at barycentric points.
 
     ω_{ij}^1 = λ_i dλ_j - λ_j dλ_i, represented as a covector (1, n) in
     reference coordinates.
@@ -84,27 +86,34 @@ def eval_whitney_1form(
     Args:
         barycentric (Tensor): (N, n+1) barycentric coordinates.
         grad_lambda (Tensor): (n+1, n) gradients ∇λ_k.
-        edge (tuple[int, int]): ordered vertex indices (i, j).
+        edges (Tensor): (M, 2) vertex index pairs (i, j).
 
     Returns:
-        (N, n) covectors (1-forms as row vectors in ℝⁿ).
+        (N, M, n) covectors (1-forms as row vectors in ℝⁿ).
     """
-    i, j = edge
-    lambda_i = barycentric[:, i:i+1]   # (N, 1)
-    lambda_j = barycentric[:, j:j+1]   # (N, 1)
+    i_idx = edges[:, 0]
+    j_idx = edges[:, 1]
 
-    grad_i = grad_lambda[i:i+1, :]     # (1, n)
-    grad_j = grad_lambda[j:j+1, :]     # (1, n)
+    lambda_i = barycentric[:, i_idx]
+    lambda_j = barycentric[:, j_idx]
 
-    return lambda_i * grad_j - lambda_j * grad_i  # (N, n)
+    grad_i = grad_lambda[i_idx, :]
+    grad_j = grad_lambda[j_idx, :]
+
+    result = (
+        lambda_i.unsqueeze(-1) * grad_j.unsqueeze(0)
+        - lambda_j.unsqueeze(-1) * grad_i.unsqueeze(0)
+    )
+
+    return result
 
 
 def eval_whitney_2form(
     barycentric: Tensor,
     grad_lambda: Tensor,
-    face: tuple[int, int, int],
+    faces: Tensor,
 ) -> Tensor:
-    """Evaluate Whitney 2-form at barycentric points.
+    """Evaluate Whitney 2-forms at barycentric points.
 
     ω_{ijk}^2 = 2(λ_i dλ_j ∧ dλ_k + λ_j dλ_k ∧ dλ_i + λ_k dλ_i ∧ dλ_j),
 
@@ -115,41 +124,44 @@ def eval_whitney_2form(
     Args:
         barycentric (Tensor): (N, n+1) barycentric coordinates.
         grad_lambda (Tensor): (n+1, n) gradients ∇λ_k.
-        face (tuple[int, int, int]): ordered vertex indices (i, j, k).
+        faces (Tensor): (M, 3) vertex index triples (i, j, k).
 
     Returns:
-        (N, n, n) antisymmetric matrices representing 2-forms.
+        (N, M, n, n) antisymmetric matrices representing 2-forms.
     """
-    i, j, k = face
-    n = grad_lambda.shape[1]
     N = barycentric.shape[0]
+    M = faces.shape[0]
+    n = grad_lambda.shape[1]
 
-    lambda_vals = [
-        barycentric[:, i],
-        barycentric[:, j],
-        barycentric[:, k],
-    ]
-    grads = [
-        grad_lambda[i, :],
-        grad_lambda[j, :],
-        grad_lambda[k, :],
-    ]
+    i_idx = faces[:, 0]
+    j_idx = faces[:, 1]
+    k_idx = faces[:, 2]
 
-    result = torch.zeros(N, n, n, device=barycentric.device, dtype=barycentric.dtype)
+    lambda_i = barycentric[:, i_idx]
+    lambda_j = barycentric[:, j_idx]
+    lambda_k = barycentric[:, k_idx]
 
-    # ω = 2 Σ_{cyclic} λ_p dλ_q ∧ dλ_r
-    # dλ_q ∧ dλ_r = antisymmetric outer product
-    cyclic = [(0, 1, 2), (1, 2, 0), (2, 0, 1)]
-    for p_idx, q_idx, r_idx in cyclic:
-        lam_p = lambda_vals[p_idx].unsqueeze(-1).unsqueeze(-1)  # (N, 1, 1)
-        g_q = grads[q_idx].unsqueeze(0)  # (1, n)
-        g_r = grads[r_idx].unsqueeze(0)  # (1, n)
+    grad_i = grad_lambda[i_idx, :]
+    grad_j = grad_lambda[j_idx, :]
+    grad_k = grad_lambda[k_idx, :]
 
-        # dλ_q ∧ dλ_r as antisymmetric matrix: outer(g_q, g_r) - outer(g_r, g_q)
-        wedge = g_q.unsqueeze(-1) * g_r.unsqueeze(-2) - g_r.unsqueeze(-1) * g_q.unsqueeze(-2)
-        # wedge: (1, n, n)
+    result = torch.zeros(N, M, n, n, device=barycentric.device, dtype=barycentric.dtype)
 
-        result += lam_p * wedge
+    cyclic_lambda = [lambda_i, lambda_j, lambda_k]
+    cyclic_grads = [grad_i, grad_j, grad_k]
+    cyclic_indices = [(0, 1, 2), (1, 2, 0), (2, 0, 1)]
+
+    for p_idx, q_idx, r_idx in cyclic_indices:
+        lam_p = cyclic_lambda[p_idx]
+        g_q = cyclic_grads[q_idx]
+        g_r = cyclic_grads[r_idx]
+
+        wedge = (
+            g_q.unsqueeze(1).unsqueeze(-1) * g_r.unsqueeze(1).unsqueeze(-2)
+            - g_r.unsqueeze(1).unsqueeze(-1) * g_q.unsqueeze(1).unsqueeze(-2)
+        )
+
+        result += lam_p.unsqueeze(-1).unsqueeze(-1).unsqueeze(1) * wedge
 
     return 2.0 * result
 
@@ -169,8 +181,7 @@ def eval_whitney_3form(
     Returns:
         Scalar value of the 3-form coefficient (constant over the simplex).
     """
-    # dλ_1 ∧ dλ_2 ∧ dλ_3 = det of the 3×3 matrix [∇λ_1, ∇λ_2, ∇λ_3]
-    grad_matrix = grad_lambda[1:, :]  # (3, 3)
+    grad_matrix = grad_lambda[1:, :]
     det_val = torch.linalg.det(grad_matrix)
     return 6.0 * det_val
 
@@ -220,31 +231,16 @@ def eval_whitney_kform_all(
     device = barycentric.device
     grad_lambda = barycentric_gradients_reference(n, device)
     dofs = enumerate_whitney_dofs(n, k)
-    n_dof = len(dofs)
-    N = barycentric.shape[0]
+    dofs_tensor = torch.tensor(dofs, dtype=torch.long, device=device)
 
     if k == 0:
-        result = torch.empty(N, n_dof, device=device, dtype=barycentric.dtype)
-        for idx, (vertex,) in enumerate(dofs):
-            result[:, idx] = eval_whitney_0form(barycentric, vertex)
-        return result
-
+        return eval_whitney_0form(barycentric, dofs_tensor)
     elif k == 1:
-        result = torch.empty(N, n_dof, n, device=device, dtype=barycentric.dtype)
-        for idx, edge in enumerate(dofs):
-            result[:, idx, :] = eval_whitney_1form(barycentric, grad_lambda, edge)
-        return result
-
+        return eval_whitney_1form(barycentric, grad_lambda, dofs_tensor)
     elif k == 2:
-        result = torch.empty(N, n_dof, n, n, device=device, dtype=barycentric.dtype)
-        for idx, face in enumerate(dofs):
-            result[:, idx, :, :] = eval_whitney_2form(barycentric, grad_lambda, face)
-        return result
-
+        return eval_whitney_2form(barycentric, grad_lambda, dofs_tensor)
     elif k == 3 and n == 3:
-        # Only one DOF for k=3, constant over simplex
         vol_coeff = eval_whitney_3form(grad_lambda)
-        return vol_coeff.unsqueeze(0)  # (1,)
-
+        return vol_coeff.unsqueeze(0)
     else:
         raise ValueError(f"eval_whitney_kform_all not implemented for k={k}, n={n}")
