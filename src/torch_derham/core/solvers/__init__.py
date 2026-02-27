@@ -14,10 +14,12 @@ from .cg import (
 )
 from .preconditioners import (
     JacobiPreconditioner,
+    MLPNeuralPreconditioner,
 )
 
 __all__ = [
     "JacobiPreconditioner",
+    "MLPNeuralPreconditioner",
     "OperatorPreconditioner",
     "Preconditioner",
     "cg_solve",

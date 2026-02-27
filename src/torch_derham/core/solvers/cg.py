@@ -223,7 +223,7 @@ def cg_solve(
     info = {
         "converged": converged,
         "iterations": it + 1,
-        "residual_norm": r.norm(dim=0).max().cpu().detach().item(),
+        "residual_norm": r.detach().norm(dim=0).max(),
     }
 
     return x, info
