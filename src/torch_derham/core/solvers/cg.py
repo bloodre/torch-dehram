@@ -67,7 +67,7 @@ class Preconditioner(ABC):
         """
 
 
-class DiagonalPreconditioner(Preconditioner):
+class JacobiPreconditioner(Preconditioner):
     """Preconditioner based on the diagonal of A.
 
     Applies M^{-1} r = r / diag, which corresponds to Jacobi

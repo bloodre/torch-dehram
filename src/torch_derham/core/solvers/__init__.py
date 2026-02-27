@@ -2,20 +2,20 @@
 
 This module provides:
 - Preconditioner: abstract base class for preconditioners.
-- DiagonalPreconditioner: Jacobi (diagonal) preconditioner.
+- JacobiPreconditioner: Jacobi (diagonal) preconditioner.
 - OperatorPreconditioner: wraps an arbitrary linear operator.
 - cg_solve: Preconditioned Conjugate Gradient solver.
 """
 
 from .cg import (
-    DiagonalPreconditioner,
+    JacobiPreconditioner,
     OperatorPreconditioner,
     Preconditioner,
     cg_solve,
 )
 
 __all__ = [
-    "DiagonalPreconditioner",
+    "JacobiPreconditioner",
     "OperatorPreconditioner",
     "Preconditioner",
     "cg_solve",

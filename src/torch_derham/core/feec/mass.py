@@ -263,3 +263,64 @@ def assemble_global_mass_all(
             quad_degree,
         )
     return masses
+
+
+def lump_mass_matrix(M: SparseTensor) -> SparseTensor:
+    """Lump a mass matrix by summing each row into the diagonal.
+
+    Mass lumping replaces the consistent mass matrix with a diagonal
+    matrix where each diagonal entry is the sum of the corresponding
+    row from the original matrix. This preserves positivity and total
+    mass while providing a diagonal matrix for efficient solves.
+
+    Args:
+        M: SparseTensor mass matrix with shape (n, n).
+
+    Returns:
+        Diagonal SparseTensor with shape (n, n) containing row sums.
+    """
+    n = M.size(0)
+
+    # Compute row sums
+    row_sums = M.sum(dim=1)
+
+    # Create diagonal matrix
+    indices = torch.arange(n, device=M.device())
+    return SparseTensor(
+        row=indices,
+        col=indices,
+        value=row_sums,
+        sparse_sizes=(n, n)
+    ).coalesce()
+
+
+def is_diagonal_matrix(M: SparseTensor, tol: float = 1e-12) -> bool:
+    """Check if a sparse matrix is effectively diagonal.
+
+    Determines if all off-diagonal entries are below the given tolerance.
+    Useful for detecting when a mass matrix can be solved with O(n)
+    operations instead of iterative methods.
+
+    Args:
+        M: SparseTensor to check.
+        tol: Tolerance for considering off-diagonal entries as zero.
+
+    Returns:
+        True if matrix is diagonal within tolerance, False otherwise.
+    """
+    if M.size(0) != M.size(1):
+        return False
+
+    # Get row and column indices
+    row_idx = M.storage.row()
+    col_idx = M.storage.col()
+    values = M.storage.value()
+
+    # Check for off-diagonal entries
+    off_diagonal_mask = row_idx != col_idx
+    if off_diagonal_mask.any():
+        off_diagonal_values = values[off_diagonal_mask]
+        if torch.max(torch.abs(off_diagonal_values)) > tol:
+            return False
+
+    return True

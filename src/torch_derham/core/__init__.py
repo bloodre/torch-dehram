@@ -6,7 +6,7 @@ from .dec import DECInnerProduct, SimplicialDualCellMeasure
 from .feec import FEECInnerProduct, SimplicialGeometry
 from .ops.index import row
 from .solvers import (
-    DiagonalPreconditioner,
+    JacobiPreconditioner,
     OperatorPreconditioner,
     Preconditioner,
     cg_solve,
@@ -18,7 +18,7 @@ __all__ = [
     "CoChain",
     "ContiguousChainComplex",
     "DECInnerProduct",
-    "DiagonalPreconditioner",
+    "JacobiPreconditioner",
     "FEECInnerProduct",
     "GradedCochain",
     "OperatorPreconditioner",
