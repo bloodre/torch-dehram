@@ -8,10 +8,12 @@ This module provides:
 """
 
 from .cg import (
-    JacobiPreconditioner,
     OperatorPreconditioner,
     Preconditioner,
     cg_solve,
+)
+from .preconditioners import (
+    JacobiPreconditioner,
 )
 
 __all__ = [
