@@ -19,6 +19,8 @@ import torch
 from torch import Tensor
 from torch_sparse import SparseTensor
 
+from ..utils import extract_sparse_diagonal
+
 
 # ------------------------------------------------------------------
 # Type alias for linear operators
@@ -68,31 +70,121 @@ class Preconditioner(ABC):
 
 
 class JacobiPreconditioner(Preconditioner):
-    """Preconditioner based on the diagonal of A.
+    """Jacobi preconditioner based on the diagonal of A, with optional damping.
 
-    Applies M^{-1} r = r / diag, which corresponds to Jacobi
-    preconditioning. Effective when the diagonal captures most
-    of the conditioning of A.
+    Applies ω * M^{-1} r = ω * (r / diag), where ω ∈ (0, 1] is the
+    damping parameter. Damping can improve stability and convergence
+    for ill-conditioned systems. Effective when the diagonal captures
+    most of the conditioning of A.
 
     Args:
-        diag (Tensor): (n,) tensor of diagonal entries of A.
+        diag: (n,) tensor of diagonal entries of A.
+        omega: Damping parameter (default: 1.0, no damping).
     """
 
-    def __init__(self, diag: Tensor):
-        self._diag = diag
+    def __init__(self, diag: Tensor, omega: float = 1.0):
+        if not 0 < omega <= 1.0:
+            raise ValueError("Damping parameter omega must be in (0, 1]")
+
+        self._omega = omega
+
+        if diag.ndim == 1:
+            self._diag = diag.unsqueeze(-1)
+        elif diag.ndim == 2 and diag.size(1) == 1:
+            self._diag = diag
+        else:
+            raise ValueError("Diagonal must be a vector or a 1-column matrix.")
 
     def apply(self, r: Tensor) -> Tensor:
-        """Apply diagonal preconditioning.
+        """Apply damped diagonal preconditioning.
 
         Args:
-            r (Tensor): (n,) or (n, d) residual tensor.
+            r: (n,) or (n, d) residual tensor.
 
         Returns:
-            r / diag, same shape as r.
+            ω * (r / diag), same shape as r.
         """
-        if r.ndim == 1:
-            return r / self._diag
-        return r / self._diag.unsqueeze(-1)
+        # Apply ω * M⁻¹_approx = ω * diag(M)⁻¹
+        return self._omega * (r / self._diag)
+
+
+def estimate_condition_number_heuristic(M: SparseTensor) -> int:
+    """Fast heuristics for condition number estimation.
+
+    Uses diagonal dominance and sparsity patterns to estimate condition number
+    without expensive eigenvalue computations.
+
+    Args:
+        M: SparseTensor with shape (n, n)
+
+    Returns:
+        Estimated condition number (order of magnitude).
+    """
+    # Method 1: Diagonal dominance ratio
+    diag = extract_sparse_diagonal(M)
+    off_diagonal_sum = torch.sum(M.storage.value()) - torch.sum(diag)
+    dominance_ratio = torch.sum(diag) / off_diagonal_sum
+
+    # Method 2: Matrix size and sparsity
+    n = M.size(0)
+    nnz = len(M.storage.value())
+    sparsity = nnz / (n * n)
+
+    # Heuristic mapping
+    if dominance_ratio > 10 and sparsity < 0.05:
+        return 10  # Well-conditioned
+    elif dominance_ratio > 5 and sparsity < 0.1:
+        return 100  # Moderate
+    elif dominance_ratio > 2:
+        return 1000  # Ill-conditioned
+    else:
+        return 10000  # Very ill-conditioned
+
+
+def simple_condition_estimate(M: SparseTensor) -> int:
+    """Ultra-fast condition number guess based on sparsity.
+
+    Very rough estimate using only sparsity pattern.
+
+    Args:
+        M: SparseTensor with shape (n, n)
+
+    Returns:
+        Estimated condition number (order of magnitude).
+    """
+    n = M.size(0)
+    nnz_ratio = M.storage.value().numel() / (n * n)
+
+    if nnz_ratio < 0.01:      # Very sparse
+        return 1000
+    elif nnz_ratio < 0.05:    # Moderately sparse
+        return 500
+    else:                     # Denser
+        return 100
+
+
+def suggest_omega(condition_number: int) -> float:
+    """Suggest damping parameter omega based on condition number.
+
+    Maps condition number to appropriate damping parameter for Jacobi
+    preconditioning. Higher condition numbers require more damping.
+
+    Args:
+        condition_number: Estimated condition number (order of magnitude).
+
+    Returns:
+        Recommended omega damping parameter in (0, 1].
+    """
+    if condition_number <= 10:
+        return 1.0      # Well-conditioned - no damping needed
+    elif condition_number <= 100:
+        return 0.9      # Light damping
+    elif condition_number <= 1000:
+        return 0.8      # Moderate damping
+    elif condition_number <= 10000:
+        return 0.7      # Strong damping
+    else:
+        return 0.6      # Heavy damping for very ill-conditioned
 
 
 class OperatorPreconditioner(Preconditioner):
@@ -204,7 +296,7 @@ def cg_solve(
     info = {
         "converged": converged,
         "iterations": it + 1,
-        "residual_norm": float(r.norm(dim=0).max()),
+        "residual_norm": r.norm(dim=0).max().cpu().detach().item(),
     }
 
     return x, info

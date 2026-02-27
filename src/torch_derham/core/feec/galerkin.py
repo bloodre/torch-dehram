@@ -603,7 +603,7 @@ class GalerkinInteriorProduct:
             raise ValueError(f"k must be in [1, {self.n}], got {k}")
 
         B_k = self.coupling(k)
-        rhs = B_k.matmul(cochain_k.data)
+        rhs = B_k.matmul(cochain_k.data)  # (N_{k-1}, d)
 
         # Solve M_{k-1} y = rhs using the provided inner product object.
         y = self.inner_product.solve(rhs, k=k - 1)
