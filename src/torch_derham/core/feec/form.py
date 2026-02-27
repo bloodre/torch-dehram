@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from .whitney_reference import (
+from .reference import (
     barycentric_gradients_reference,
     enumerate_whitney_dofs,
     eval_whitney_0form,

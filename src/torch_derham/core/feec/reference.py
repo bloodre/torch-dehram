@@ -196,7 +196,7 @@ def enumerate_whitney_dofs(n: int, k: int) -> list[tuple[int, ...]]:
         k (int): form degree.
 
     Returns:
-        List of (k+1)-tuples of vertex indices.
+        List of (k+1)-tuples of vertex indices. Length: binom(n+1, k+1).
     """
     vertices = list(range(n + 1))
     return [tuple(sorted(face)) for face in combinations(vertices, k + 1)]

@@ -21,7 +21,7 @@ from torch_sparse import SparseTensor
 from ..ops.index import row as row_module
 from .geometry import SimplicialGeometry
 from .quadrature import quadrature_simplex
-from .whitney_reference import eval_whitney_kform_all, enumerate_whitney_dofs
+from .reference import eval_whitney_kform_all, enumerate_whitney_dofs
 
 if TYPE_CHECKING:
     from ..complex.simplicial import SimplicialChainComplex
