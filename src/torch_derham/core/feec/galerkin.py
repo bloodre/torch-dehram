@@ -43,6 +43,7 @@ from torch_sparse import SparseTensor
 
 from ..ops.index import row as row_module
 from ..cochain import CoChain
+from ..interior_product import InteriorProduct
 from .geometry import SimplicialGeometry
 from .quadrature import quadrature_simplex
 from .reference import enumerate_whitney_dofs, eval_whitney_kform_all
@@ -498,7 +499,7 @@ def assemble_global_B_k(
     ).coalesce()
 
 
-class GalerkinInteriorProduct:
+class GalerkinInteriorProduct(InteriorProduct):
     """Galerkin FEEC interior product operator ``i_X: C^k -> C^{k-1}``.
 
     This operator exposes two responsibilities:
@@ -513,6 +514,7 @@ class GalerkinInteriorProduct:
         chain_complex: SimplicialChainComplex,
         B_matrices: dict[int, SparseTensor],
         inner_product: FEECInnerProduct,
+        vector_field: CoChain | Tensor,
     ):
         """Initialize with pre-assembled coupling matrices.
 
@@ -522,11 +524,16 @@ class GalerkinInteriorProduct:
                 ``torch_sparse.SparseTensor`` with shape ``(N_{k-1}, N_k)``).
             inner_product: Inner product helper exposing the mass matrices and
                 a ``solve`` routine to apply ``M_{k-1}^{-1}``.
+            vector_field: Vector field as a 0-cochain or tensor.
         """
         self.chain_complex = chain_complex
         self.B_matrices = B_matrices
         self.inner_product = inner_product
         self.n = chain_complex.dim
+        self._x0 = vector_field
+
+    def _vector_field(self) -> CoChain:
+        return self._x0
 
     @classmethod
     def from_vector_field(
@@ -569,7 +576,7 @@ class GalerkinInteriorProduct:
                 quad_degree=quad_degree,
             )
 
-        return cls(chain_complex, B_matrices, inner_product)
+        return cls(chain_complex, B_matrices, inner_product, X0)
 
     def coupling(self, k: int) -> SparseTensor:
         """Return the coupling matrix ``B_k(X)``.
@@ -584,7 +591,7 @@ class GalerkinInteriorProduct:
             raise ValueError(f"No coupling matrix for k={k}")
         return self.B_matrices[k]
 
-    def apply(self, cochain_k: CoChain) -> CoChain:
+    def apply(self, alpha: CoChain) -> CoChain:
         """Apply interior product ``i_X`` to a ``k``-cochain.
 
         Computes ``y = M_{k-1}^{-1} (B_k x)`` where ``x`` is the data of the
@@ -592,18 +599,18 @@ class GalerkinInteriorProduct:
         the solve to the provided inner product.
 
         Args:
-            cochain_k: Input ``k``-cochain.
+            alpha: Input ``k``-cochain.
 
         Returns:
             Output ``(k-1)``-cochain with the projected result.
         """
 
-        k = cochain_k.k
+        k = alpha.k
         if k < 1 or k > self.n:
             raise ValueError(f"k must be in [1, {self.n}], got {k}")
 
         B_k = self.coupling(k)
-        rhs = B_k.matmul(cochain_k.data)  # (N_{k-1}, d)
+        rhs = B_k.matmul(alpha.data)  # (N_{k-1}, d)
 
         # Solve M_{k-1} y = rhs using the provided inner product object.
         y = self.inner_product.solve(rhs, k=k - 1)
