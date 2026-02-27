@@ -264,28 +264,14 @@ class FEECInnerProduct(InnerProduct):
         """
         M = self.matrix(k)
 
-        if b.ndim == 1:
-            x, _ = cg_solve(
-                M,
-                b,
-                preconditioner=self._preconditioner,
-                tol=tol,
-                maxiter=maxiter,
-            )
-            return x
-        else:
-            # Multiple RHS: solve column-by-column
-            _, d = b.shape
-            x = torch.empty_like(b)
-            for i in range(d):
-                x[:, i], _ = cg_solve(
-                    M,
-                    b[:, i],
-                    preconditioner=self._preconditioner,
-                    tol=tol,
-                    maxiter=maxiter,
-                )
-            return x
+        x, _ = cg_solve(
+            M,
+            b,
+            preconditioner=self._preconditioner,
+            tol=tol,
+            maxiter=maxiter,
+        )
+        return x
 
     def to(self, *args, **kwargs) -> FEECInnerProduct:
         """Move all tensors to specified device/dtype."""
