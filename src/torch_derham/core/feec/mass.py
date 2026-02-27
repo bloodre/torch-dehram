@@ -294,6 +294,7 @@ def lump_mass_matrix(M: SparseTensor) -> SparseTensor:
     ).coalesce()
 
 
+@torch.no_grad()
 def is_diagonal_matrix(M: SparseTensor, tol: float = 1e-12) -> bool:
     """Check if a sparse matrix is effectively diagonal.
 

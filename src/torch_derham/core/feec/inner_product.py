@@ -21,7 +21,7 @@ from ..complex.chain import ChainComplex, ContiguousChainComplex
 from ..metric.inner_product import InnerProduct
 from ..solvers.cg import Preconditioner, cg_solve
 from .geometry import SimplicialGeometry
-from .mass import assemble_global_mass_all
+from .mass import assemble_global_mass_all, is_diagonal_matrix
 
 
 class FEECInnerProduct(InnerProduct):
@@ -41,6 +41,8 @@ class FEECInnerProduct(InnerProduct):
             providing offsets for global mode.
         preconditioner (Preconditioner | None): optional preconditioner
             for iterative solves (default: None → unpreconditioned CG).
+        check_diagonality (bool): whether to check if mass matrices are
+            diagonal (default: True).
     """
 
     def __init__(
@@ -48,13 +50,29 @@ class FEECInnerProduct(InnerProduct):
         masses: dict[int, SparseTensor],
         chain_complex: Union[ChainComplex, ContiguousChainComplex],
         preconditioner: Optional[Preconditioner] = None,
+        check_diagonality: bool = True,
     ):
+        """Initialize with mass matrices and diagonal detection.
+
+        Args:
+            masses: Per-degree mass matrices.
+            chain_complex: Topology for global operations.
+            preconditioner: Optional preconditioner for CG solves.
+        """
         self._masses = masses
         self._chain_complex = chain_complex
         self._is_contiguous = isinstance(chain_complex, ContiguousChainComplex)
         self._preconditioner = preconditioner
 
         self._mass_global: Optional[SparseTensor] = None
+
+        # Precompute diagonal status for all mass matrices
+        self._is_diagonal: dict[int, bool] = {}
+        if check_diagonality:
+            self._is_diagonal = {
+                k: is_diagonal_matrix(M)
+                for k, M in masses.items()
+            }
 
     @classmethod
     def from_geometry(
@@ -182,19 +200,67 @@ class FEECInnerProduct(InnerProduct):
         tol: float = 1e-6,
         maxiter: int = 30,
     ) -> Tensor:
-        """Solve M_k @ x = b for x using preconditioned CG.
+        """Solve M_k @ x = b for x using optimal method.
+
+        Automatically routes to diagonal solve when M_k is diagonal,
+        otherwise uses preconditioned CG for full sparse matrices.
 
         Args:
-            b (Tensor): (n_k, d) or (n_total, d) right-hand side.
-            k (int | None): degree, or None for global operator.
-            tol (float): tolerance for CG (default 1e-6).
-            maxiter (int): maximum CG iterations (default 30).
+            b: Right-hand side with shape (n_k, d) or (n_total, d).
+            k: Form degree, or None for global operator.
+            tol: Tolerance for CG (ignored for diagonal solves).
+            maxiter: Maximum CG iterations (ignored for diagonal solves).
 
         Returns:
-            x, same shape as b.
+            Solution x with same shape as b.
 
         Raises:
-            ValueError: if k=None but complex is not ContiguousChainComplex.
+            ValueError: If k=None but complex is not ContiguousChainComplex.
+        """
+        # Check if we can use fast diagonal solve
+        if k is not None and self._is_diagonal.get(k, False):
+            return self._diag_solve(b, k)
+        else:
+            return self._cg_solve(b, k, tol, maxiter)
+
+    def _diag_solve(self, b: Tensor, k: int) -> Tensor:
+        """Solve diagonal system M_k @ x = b using O(n) operations.
+
+        For diagonal matrices, the solution is simply x_i = b_i / M_ii.
+        This provides exact solution in linear time without iteration.
+
+        Args:
+            b: Right-hand side with shape (n_k, d) or (n_k,).
+            k: Form degree for the diagonal mass matrix.
+
+        Returns:
+            Solution x with same shape as b.
+        """
+        return b / self.matrix(k)
+
+    def _cg_solve(
+        self,
+        b: Tensor,
+        k: Optional[int] = None,
+        tol: float = 1e-6,
+        maxiter: int = 30,
+    ) -> Tensor:
+        """Solve M_k @ x = b for x using preconditioned conjugate gradient.
+
+        Used when the mass matrix is not diagonal. Iteratively solves
+        the sparse symmetric positive definite system.
+
+        Args:
+            b: Right-hand side with shape (n_k, d) or (n_total, d).
+            k: Form degree, or None for global operator.
+            tol: Convergence tolerance for CG iterations.
+            maxiter: Maximum number of CG iterations.
+
+        Returns:
+            Solution x with same shape as b.
+
+        Raises:
+            ValueError: If k=None but complex is not ContiguousChainComplex.
         """
         M = self.matrix(k)
 
