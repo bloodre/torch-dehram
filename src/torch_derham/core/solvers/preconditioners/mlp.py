@@ -17,18 +17,19 @@ class MLPNeuralPreconditioner(Preconditioner, nn.Module):
     Learns mapping: r → M^{-1} @ r using a configurable MLP.
 
     Args:
-        matrix_dim: Dimension of the matrix (and vectors)
-        hidden_dims: List of hidden layer dimensions
-        activation: Activation function ('relu', 'gelu', 'tanh')
-        dropout: Dropout rate
-        layer_norm: Whether to use layer normalization
-        use_residual: Whether to use residual connection
+        matrix_dim (int): Dimension of the matrix (and vectors)
+        hidden_dims (list[int]): List of hidden layer dimensions
+        activation (str | nn.Module): Activation function ('relu', 'gelu', 'tanh')
+            or nn.Module instance
+        dropout (float): Dropout rate
+        layer_norm (bool): Whether to use layer normalization
+        use_residual (bool): Whether to use residual connection
     """
 
     def __init__(self,
                  matrix_dim: int,
                  hidden_dims: list[int] = [256, 256, 256],
-                 activation: str = 'relu',
+                 activation: str | nn.Module = 'relu',
                  dropout: float = 0.0,
                  layer_norm: bool = True,
                  use_residual: bool = False):
@@ -36,20 +37,26 @@ class MLPNeuralPreconditioner(Preconditioner, nn.Module):
         self.matrix_dim = matrix_dim
         self.use_residual = use_residual
 
+        # Resolve activation
+        def get_activation() -> nn.Module:
+            if isinstance(activation, nn.Module):
+                return activation
+            if activation == 'relu':
+                return nn.ReLU()
+            elif activation == 'gelu':
+                return nn.GELU()
+            elif activation == 'tanh':
+                return nn.Tanh()
+            else:
+                raise ValueError(f"Unknown activation: {activation}")
+
         # Build MLP dynamically
         layers = []
         input_dim = matrix_dim
 
         for hidden_dim in hidden_dims:
             layers.append(nn.Linear(input_dim, hidden_dim))
-
-            # Activation
-            if activation == 'relu':
-                layers.append(nn.ReLU())
-            elif activation == 'gelu':
-                layers.append(nn.GELU())
-            elif activation == 'tanh':
-                layers.append(nn.Tanh())
+            layers.append(get_activation())
 
             # Regularization
             if dropout > 0:
