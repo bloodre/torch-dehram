@@ -25,6 +25,7 @@ from torch import Tensor
 from .cochain import CoChain
 from .interior_product import InteriorProduct
 from .complex import ChainComplex, ContiguousChainComplex
+from .metric import DiscreteCalculus
 
 
 class LieDerivative(ABC):
@@ -102,7 +103,7 @@ class CartanLieDerivative(LieDerivative):
     def __init__(
         self,
         interior_product: InteriorProduct,
-        chain: ChainComplex | ContiguousChainComplex,
+        chain: ChainComplex | ContiguousChainComplex | DiscreteCalculus,
     ):
         self.interior_product = interior_product
         self.chain = chain

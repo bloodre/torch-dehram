@@ -16,6 +16,8 @@ Implementations should provide:
 - vector_field: access the underlying vector field X
 """
 from abc import ABC, abstractmethod
+from typing import Callable
+
 from torch import Tensor
 
 from .cochain import CoChain
@@ -62,3 +64,11 @@ class InteriorProduct(ABC):
             if self._vector_field().k != 0:
                 raise ValueError("When CoChain is used, the degree should be 0.")
         return self._vector_field()
+
+
+InteriorProductBuilder = Callable[[CoChain | Tensor], InteriorProduct]
+"""Type alias for a factory that builds an InteriorProduct from a vector field.
+
+A builder takes a vector field (as a 0-cochain or tensor) and returns
+an InteriorProduct operator configured for that vector field.
+"""
