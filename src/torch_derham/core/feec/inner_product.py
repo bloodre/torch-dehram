@@ -193,6 +193,22 @@ class FEECInnerProduct(InnerProduct):
             return M @ x
         return M @ x
 
+    def pair(self, x: Tensor, y: Tensor, k: Optional[int] = None) -> Tensor:
+        """Compute inner product <x, y>_k = x^T M_k y.
+
+        Args:
+            x (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            y (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            k (int | None): cochain degree, or None for global operator.
+
+        Returns:
+            Scalar or (d,) tensor of inner product values.
+        """
+        My = self.apply(y, k)
+        if x.ndim == 1:
+            return torch.dot(x, My)
+        return torch.sum(x * My, dim=0)
+
     def solve(
         self,
         b: Tensor,

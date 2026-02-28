@@ -10,6 +10,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
+import torch
+
 from torch import Tensor
 from torch_sparse import SparseTensor
 
@@ -48,6 +50,44 @@ class InnerProduct(ABC):
         Returns:
             M_k @ x as (n_k, d) or (n_total, d) tensor.
         """
+
+    @abstractmethod
+    def pair(self, x: Tensor, y: Tensor, k: Optional[int] = None) -> Tensor:
+        """Compute inner product <x, y>_k = x^T M_k y.
+
+        Args:
+            x (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            y (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            k (int | None): cochain degree, or None for global operator.
+
+        Returns:
+            Scalar or (d,) tensor of inner product values.
+        """
+
+    def norm(self, x: Tensor, k: Optional[int] = None) -> Tensor:
+        """Compute norm ||x||_k = sqrt(<x, x>_k).
+
+        Args:
+            x (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            k (int | None): cochain degree, or None for global operator.
+
+        Returns:
+            Scalar or (d,) tensor of norm values.
+        """
+        return torch.sqrt(self.pair(x, x, k))
+
+    def distance(self, x: Tensor, y: Tensor, k: Optional[int] = None) -> Tensor:
+        """Compute distance ||x - y||_k.
+
+        Args:
+            x (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            y (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            k (int | None): cochain degree, or None for global operator.
+
+        Returns:
+            Scalar or (d,) tensor of distance values.
+        """
+        return self.norm(x - y, k)
 
     @abstractmethod
     def solve(self, b: Tensor, k: Optional[int] = None) -> Tensor:

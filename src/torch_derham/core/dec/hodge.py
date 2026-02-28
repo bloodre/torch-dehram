@@ -119,12 +119,12 @@ class DECInnerProduct(InnerProduct):
             return self._diagonal_global()
         return self._diagonal_k(k)
 
-    def apply(self, k: Optional[int], x: Tensor) -> Tensor:
+    def apply(self, x: Tensor, k: Optional[int] = None) -> Tensor:
         """Apply M_k to cochain values x.
 
         Args:
-            k (int | None): cochain degree, or None for global operator.
             x (Tensor): (n_k, d) or (n_total, d) cochain values.
+            k (int | None): cochain degree, or None for global operator.
 
         Returns:
             M_k @ x = diag_k * x, same shape as x.
@@ -137,12 +137,31 @@ class DECInnerProduct(InnerProduct):
             return d * x
         return d.unsqueeze(-1) * x
 
-    def solve(self, k: Optional[int], b: Tensor) -> Tensor:
+    def pair(self, x: Tensor, y: Tensor, k: Optional[int] = None) -> Tensor:
+        """Compute inner product <x, y>_k = x^T M_k y.
+
+        Args:
+            x (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            y (Tensor): (n_k,) or (n_k, d) tensor of cochain values.
+            k (int | None): cochain degree, or None for global operator.
+
+        Returns:
+            Scalar or (d,) tensor of inner product values.
+
+        Raises:
+            ValueError: if k=None but complex is not ContiguousChainComplex.
+        """
+        My = self.apply(y, k)
+        if x.ndim == 1:
+            return torch.dot(x, My)
+        return torch.sum(x * My, dim=0)
+
+    def solve(self, b: Tensor, k: Optional[int] = None) -> Tensor:
         """Solve M_k @ x = b for x.
 
         Args:
-            k (int | None): cochain degree, or None for global operator.
             b (Tensor): (n_k, d) or (n_total, d) right-hand side.
+            k (int | None): cochain degree, or None for global operator.
 
         Returns:
             x = b / diag_k, same shape as b.
