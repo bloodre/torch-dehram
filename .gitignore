@@ -22,3 +22,4 @@ poetry.lock
 
 # Plan and notes
 plan/
+dev.ipynb
