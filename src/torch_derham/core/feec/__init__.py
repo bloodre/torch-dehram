@@ -40,7 +40,7 @@ from .mass import (
     assemble_global_mass_k,
     assemble_local_mass_k,
 )
-from .quadrature import quadrature_simplex
+from .quadrature import *
 from .reference import (
     enumerate_whitney_dofs,
     eval_whitney_kform_all,
@@ -56,5 +56,4 @@ __all__ = [
     "assemble_local_mass_k",
     "enumerate_whitney_dofs",
     "eval_whitney_kform_all",
-    "quadrature_simplex",
 ]
