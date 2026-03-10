@@ -20,7 +20,7 @@ from torch import Tensor
 from torch_sparse import SparseTensor
 from ..ops.index import row as row_module
 from .geometry import SimplicialGeometry
-from .quadrature import quadrature_simplex
+from .quadrature import Quadrature
 from .reference import eval_whitney_kform_all, enumerate_whitney_dofs
 
 if TYPE_CHECKING:
@@ -29,15 +29,15 @@ if TYPE_CHECKING:
 
 def assemble_local_mass_k(
     geometry: SimplicialGeometry,
+    quad: Quadrature,
     k: int,
-    quad_degree: int,
 ) -> Tensor:
     """Assemble local mass matrices for all top simplices at degree k.
 
     Args:
         geometry (SimplicialGeometry): mesh geometry.
+        quad (Quadrature): quadrature rule.
         k (int): form degree.
-        quad_degree (int): polynomial degree for quadrature exactness.
 
     Returns:
         (N_n, n_loc_k, n_loc_k) local mass matrices for each top simplex.
@@ -51,7 +51,7 @@ def assemble_local_mass_k(
         raise ValueError(f"k={k} > n={n}")
 
     # Reference quadrature
-    bary_ref, weights_ref = quadrature_simplex(n, quad_degree)
+    bary_ref, weights_ref = quad.points, quad.weights
     bary_ref = bary_ref.to(device=device, dtype=dtype)
     weights_ref = weights_ref.to(device=device, dtype=dtype)
 
@@ -151,8 +151,8 @@ def assemble_local_mass_k(
 def assemble_global_mass_k(
     chain_complex: SimplicialChainComplex,
     geometry: SimplicialGeometry,
+    quad: Quadrature,
     k: int,
-    quad_degree: int = 2,
 ) -> SparseTensor:
     """Assemble global sparse mass matrix M_k for degree k.
 
@@ -162,8 +162,8 @@ def assemble_global_mass_k(
     Args:
         chain_complex (SimplicialChainComplex): mesh topology.
         geometry (SimplicialGeometry): mesh geometry.
+        quad (Quadrature): quadrature rule.
         k (int): form degree.
-        quad_degree (int): quadrature polynomial degree (default 2).
 
     Returns:
         SparseTensor (N_k, N_k) global sparse mass matrix.
@@ -176,7 +176,7 @@ def assemble_global_mass_k(
         raise ValueError(f"k={k} > n={n}")
 
     # Assemble local matrices: (N_n, n_loc, n_loc)
-    M_local = assemble_local_mass_k(geometry, k, quad_degree)
+    M_local = assemble_local_mass_k(geometry, quad, k)
     N_n, n_loc, _ = M_local.shape
 
     # Global DOF numbering: k-simplices in the complex
@@ -241,14 +241,14 @@ def assemble_global_mass_k(
 def assemble_global_mass_all(
     chain_complex: SimplicialChainComplex,
     geometry: SimplicialGeometry,
-    quad_degree: int = 2,
+    quad: Quadrature,
 ) -> dict[int, SparseTensor]:
     """Assemble global mass matrices for all degrees k=0..n.
 
     Args:
         chain_complex (SimplicialChainComplex): mesh topology.
         geometry (SimplicialGeometry): mesh geometry.
-        quad_degree (int): quadrature polynomial degree (default 2).
+        quad (Quadrature): quadrature rule.
 
     Returns:
         Dictionary mapping k → M_k (SparseTensor).
@@ -259,8 +259,8 @@ def assemble_global_mass_all(
         masses[k] = assemble_global_mass_k(
             chain_complex,
             geometry,
+            quad,
             k,
-            quad_degree,
         )
     return masses
 
